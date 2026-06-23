@@ -28,6 +28,16 @@ copy .env.example .env
 BOT_TOKEN=你的 Telegram Bot Token
 ```
 
+如果你要走代理，再填：
+
+```text
+HTTP_PROXY=http://代理地址:端口
+HTTPS_PROXY=http://代理地址:端口
+ALL_PROXY=socks5://代理地址:端口
+```
+
+这个项目使用的 HTTP 客户端会自动读取这些环境变量，Telegram、Tron、TON、汇率和价格接口都会一起走代理。
+
 3. 启动：
 
 ```powershell
@@ -110,6 +120,8 @@ docker compose up -d --build
 ```text
 BOT_TOKEN=你的 Telegram Bot Token
 ```
+
+如果服务器环境需要代理，把同样的 `HTTP_PROXY`、`HTTPS_PROXY` 或 `ALL_PROXY` 也填进去。
 
 常用维护命令：
 
