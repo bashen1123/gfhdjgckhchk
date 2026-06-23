@@ -93,6 +93,35 @@ docker build -t telegram-web2-bot .
 docker run --env-file .env -v ${PWD}/data:/app/data telegram-web2-bot
 ```
 
+### VPS / Docker Compose 推荐
+
+服务器安装 Docker 后执行：
+
+```bash
+git clone https://github.com/bashen1123/gfhdjgckhchk.git
+cd gfhdjgckhchk
+cp .env.example .env
+nano .env
+docker compose up -d --build
+```
+
+`.env` 至少需要设置：
+
+```text
+BOT_TOKEN=你的 Telegram Bot Token
+```
+
+常用维护命令：
+
+```bash
+docker compose logs -f
+docker compose restart
+docker compose pull
+docker compose up -d --build
+```
+
+SQLite 数据会保存在服务器项目目录的 `data/bot.db`，容器重启或升级不会丢失。
+
 ## 重要说明
 
 这个机器人不应收集用户私钥、助记词、交易所密码、OTP 或银行卡敏感信息。OTC 模块只做台账，不做资金托管、不做支付指令、不自动放币。

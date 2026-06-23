@@ -1,0 +1,11 @@
+services:
+  bot:
+    build: .
+    container_name: telegram-web2-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BOT_DB: /app/data/bot.db
+    volumes:
+      - ./data:/app/data

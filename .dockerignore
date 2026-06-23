@@ -1,0 +1,8 @@
+.env
+.git
+.gitignore
+bot.db
+data/
+__pycache__/
+*.pyc
+*.log
