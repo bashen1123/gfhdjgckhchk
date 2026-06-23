@@ -31,12 +31,15 @@ BOT_TOKEN=你的 Telegram Bot Token
 如果你要走代理，再填：
 
 ```text
+PROXY_API_URL=https://www.90daili.com/get_ip/你的接口
+# 或者直接填：
+PROXY_URL=http://user:pass@host:port
 HTTP_PROXY=http://代理地址:端口
 HTTPS_PROXY=http://代理地址:端口
-ALL_PROXY=socks5://代理地址:端口
+ALL_PROXY=http://代理地址:端口
 ```
 
-这个项目使用的 HTTP 客户端会自动读取这些环境变量，Telegram、Tron、TON、汇率和价格接口都会一起走代理。
+`PROXY_API_URL` 会在启动时先请求一次，解析出 `host|port|user|pass` 或直接的代理 URL，再用于后续请求。这个项目使用同一套 HTTP 客户端，所以 Telegram、Tron、TON、汇率和价格接口都会一起走代理。
 
 3. 启动：
 
@@ -121,7 +124,7 @@ docker compose up -d --build
 BOT_TOKEN=你的 Telegram Bot Token
 ```
 
-如果服务器环境需要代理，把同样的 `HTTP_PROXY`、`HTTPS_PROXY` 或 `ALL_PROXY` 也填进去。
+如果服务器环境需要代理，把 `PROXY_API_URL` 或 `PROXY_URL` 也填进去。
 
 常用维护命令：
 

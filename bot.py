@@ -33,8 +33,16 @@ POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "60"))
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT_SECONDS", "15"))
 TRONGRID_API_KEY = os.getenv("TRONGRID_API_KEY", "").strip()
 TONAPI_KEY = os.getenv("TONAPI_KEY", "").strip()
+PROXY_API_URL = os.getenv("PROXY_API_URL", "").strip()
+PROXY_REFRESH_SECONDS = int(os.getenv("PROXY_REFRESH_SECONDS", "300"))
+PROXY_URL = os.getenv("PROXY_URL", "").strip()
 
 TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+HTTP_OPENER = None
+HTTP_OPENER_BUILT_AT = 0.0
+HTTP_OPENER_LOCK = threading.Lock()
 
 
 HELP = """可用命令
@@ -139,9 +147,106 @@ def init_db():
         )
 
 
+def _read_url(url, headers=None, timeout=HTTP_TIMEOUT):
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": "telegram-web2-bot/1.0"})
+    with DIRECT_OPENER.open(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _extract_proxy_url(text):
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    match = re.search(r"<pre[^>]*>(.*?)</pre>", raw, flags=re.I | re.S)
+    if match:
+        raw = match.group(1).strip()
+    raw = re.sub(r"<[^>]+>", "", raw).strip()
+    if not raw:
+        return None
+    if "://" in raw:
+        return raw
+    parts = [part.strip() for part in raw.split("|")]
+    if len(parts) == 4:
+        host, port, username, password = parts
+        username = urllib.parse.quote(username, safe="")
+        password = urllib.parse.quote(password, safe="")
+        return f"http://{username}:{password}@{host}:{port}"
+    if len(parts) == 2:
+        host, port = parts
+        return f"http://{host}:{port}"
+    return raw
+
+
+def _env_proxy_map():
+    proxies = {}
+    all_proxy = os.getenv("ALL_PROXY", "").strip()
+    http_proxy = os.getenv("HTTP_PROXY", "").strip()
+    https_proxy = os.getenv("HTTPS_PROXY", "").strip()
+    if all_proxy:
+        proxies["http"] = all_proxy
+        proxies["https"] = all_proxy
+    if http_proxy:
+        proxies["http"] = http_proxy
+    if https_proxy:
+        proxies["https"] = https_proxy
+    return proxies
+
+
+def _resolve_proxy_url():
+    if PROXY_URL:
+        return PROXY_URL
+    if not PROXY_API_URL:
+        return None
+    raw = _read_url(PROXY_API_URL, timeout=HTTP_TIMEOUT)
+    return _extract_proxy_url(raw)
+
+
+def _proxy_display(proxy_url):
+    parsed = urllib.parse.urlsplit(proxy_url if "://" in proxy_url else f"http://{proxy_url}")
+    host = parsed.hostname or ""
+    port = f":{parsed.port}" if parsed.port else ""
+    scheme = parsed.scheme or "http"
+    return f"{scheme}://{host}{port}"
+
+
+def _build_http_opener():
+    proxies = _env_proxy_map()
+    proxy_url = None
+    try:
+        proxy_url = _resolve_proxy_url()
+    except Exception as exc:
+        print(f"Proxy load failed: {exc}")
+    if proxy_url:
+        proxies["http"] = proxy_url
+        proxies["https"] = proxy_url
+        print(f"Using proxy: {_proxy_display(proxy_url)}")
+    return urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
+
+
+def http_opener(force_refresh=False):
+    global HTTP_OPENER, HTTP_OPENER_BUILT_AT
+    now = time.monotonic()
+    should_refresh = (
+        force_refresh
+        or HTTP_OPENER is None
+        or (PROXY_API_URL and PROXY_REFRESH_SECONDS > 0 and (now - HTTP_OPENER_BUILT_AT) >= PROXY_REFRESH_SECONDS)
+    )
+    if should_refresh:
+        with HTTP_OPENER_LOCK:
+            now = time.monotonic()
+            if (
+                force_refresh
+                or HTTP_OPENER is None
+                or (PROXY_API_URL and PROXY_REFRESH_SECONDS > 0 and (now - HTTP_OPENER_BUILT_AT) >= PROXY_REFRESH_SECONDS)
+            ):
+                HTTP_OPENER = _build_http_opener()
+                HTTP_OPENER_BUILT_AT = now
+    return HTTP_OPENER
+
+
 def http_json(url, headers=None):
     req = urllib.request.Request(url, headers=headers or {"User-Agent": "telegram-web2-bot/1.0"})
-    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+    with http_opener().open(req, timeout=HTTP_TIMEOUT) as resp:
         body = resp.read().decode("utf-8", errors="replace")
         return json.loads(body)
 
@@ -150,7 +255,7 @@ def tg(method, payload):
     data = urllib.parse.urlencode(payload).encode()
     req = urllib.request.Request(f"{TG_API}/{method}", data=data)
     timeout = max(HTTP_TIMEOUT, int(payload.get("timeout", 0)) + 5)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with http_opener().open(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
